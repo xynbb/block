@@ -43,8 +43,8 @@ func (b *Block) setHash() {
 	hash := sha256.Sum256(headers)
 	b.Hash = hash[:]
 }
-func calculator(a int, b int) {
-	fmt.Printf("%d\n", a+b)
+func calculator(a string) {
+	fmt.Printf("%s\n", a)
 }
 
 func main() {
@@ -63,6 +63,6 @@ func main() {
 
 	bus := EventBus.New()
 	bus.Subscribe("main:calculator", calculator)
-	bus.Publish("main:calculator", 20, 40)
+	bus.Publish("main:calculator", "发送的消息")
 	bus.Unsubscribe("main:calculator", calculator)
 }
