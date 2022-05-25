@@ -1,68 +1,55 @@
 package main
 
 import (
-	"bytes"
-	"crypto/sha256"
 	"fmt"
 	"github.com/asaskevich/EventBus"
-	"strconv"
-	"time"
+	"github.com/umbracle/ethgo"
+	"github.com/umbracle/ethgo/builtin/erc20"
 )
 
-type Block struct {
-	Index         int64
-	TimeStamp     int64
-	Data          []byte
-	PrevBlockHash []byte
-	Hash          []byte
-}
-type Blockchain struct {
-	blocks []*Block
-}
+var (
+	zeroX       = ethgo.HexToAddress("0xe41d2489571d322189246dafa5ebde1f4699f498")
+	owerAddr    = ethgo.HexToAddress("1000")
+	spenderAddr = ethgo.HexToAddress("2000")
+)
 
-func NewBlock(index int64, data, prevBlockHash []byte) *Block {
-	block := &Block{index, time.Now().Unix(), data, prevBlockHash, []byte{}}
-	block.setHash()
-	return block
-}
-func NewGenesiBlock() *Block {
-	return NewBlock(0, []byte("first block"), []byte{})
-}
-func NewBlockchain() *Blockchain {
-	return &Blockchain{[]*Block{NewGenesiBlock()}}
-}
-func (bc *Blockchain) AddBlock(data string) {
-	prevBlock := bc.blocks[len(bc.blocks)-1]
-	newBlock := NewBlock(prevBlock.Index+1, []byte(data), prevBlock.Hash)
-	bc.blocks = append(bc.blocks, newBlock)
-}
-func (b *Block) setHash() {
-	timestamp := []byte(strconv.FormatInt(b.TimeStamp, 10))
-	index := []byte(strconv.FormatInt(b.TimeStamp, 10))
-	headers := bytes.Join([][]byte{timestamp, index, b.PrevBlockHash}, []byte{})
-	hash := sha256.Sum256(headers)
-	b.Hash = hash[:]
-}
 func calculator(a string) {
 	fmt.Printf("%s\n", a)
 }
 
 func main() {
-	bc := NewBlockchain()
-	bc.AddBlock("send 1 BTC")
-	bc.AddBlock("send 2 BTC")
+	erc20 := erc20.NewERC20(zeroX)
 
-	for _, block := range bc.blocks {
-		fmt.Printf("Index: %d\n", block.Index)
-		fmt.Printf("TimeStamp: %d\n", block.TimeStamp)
-		fmt.Printf("Data: %s\n", block.Data)
-		fmt.Printf("PrevBlockHash: %x\n", block.PrevBlockHash)
-		fmt.Printf("Hash: %x\n", block.Hash)
-		fmt.Println("==========================================")
-	}
+	// Name calls the name method in the solidity contract
+	name, _ := erc20.Name()
+	fmt.Println(name)
+
+	//Symbol calls the symbol method in the solidity contract
+	symbol, _ := erc20.Symbol()
+	fmt.Println(symbol)
+
+	//Decimals calls the decimals method in the solidity contract
+	decimals, _ := erc20.Decimals()
+	fmt.Println(decimals)
+
+	// TotalSupply calls the totalSupply method in the solidity contract
+	supply, _ := erc20.TotalSupply()
+	fmt.Println(supply)
+
+	//BalanceOf calls the balanceOf method in the solidity contract
+	erc20.BalanceOf(owerAddr)
+
+	//Transfer sends a transfer transaction in the solidity contract
+	erc20.Approve(spenderAddr, supply)
+	erc20.Allowance(owerAddr, spenderAddr)
+
+	//transfer event
+	approveHash := erc20.ApprovalEventSig()
+	transferHash := erc20.TransferEventSig()
 
 	bus := EventBus.New()
 	bus.Subscribe("main:calculator", calculator)
-	bus.Publish("main:calculator", "发送的消息")
+	bus.Publish("main:calculator", approveHash)
+	bus.Publish("main:calculator", transferHash)
 	bus.Unsubscribe("main:calculator", calculator)
 }
