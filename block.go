@@ -4,13 +4,8 @@ import (
 	"fmt"
 	"github.com/asaskevich/EventBus"
 	"github.com/umbracle/ethgo"
-	"github.com/umbracle/ethgo/builtin/erc20"
-)
-
-var (
-	zeroX       = ethgo.HexToAddress("0xe41d2489571d322189246dafa5ebde1f4699f498")
-	owerAddr    = ethgo.HexToAddress("1000")
-	spenderAddr = ethgo.HexToAddress("2000")
+	"github.com/umbracle/ethgo/jsonrpc"
+	"log"
 )
 
 func calculator(a string) {
@@ -18,38 +13,47 @@ func calculator(a string) {
 }
 
 func main() {
-	erc20 := erc20.NewERC20(zeroX)
-
-	// Name calls the name method in the solidity contract
-	name, _ := erc20.Name()
-	fmt.Println(name)
-
-	//Symbol calls the symbol method in the solidity contract
-	symbol, _ := erc20.Symbol()
-	fmt.Println(symbol)
-
-	//Decimals calls the decimals method in the solidity contract
-	decimals, _ := erc20.Decimals()
-	fmt.Println(decimals)
-
-	// TotalSupply calls the totalSupply method in the solidity contract
-	supply, _ := erc20.TotalSupply()
-	fmt.Println(supply)
-
-	//BalanceOf calls the balanceOf method in the solidity contract
-	erc20.BalanceOf(owerAddr)
-
-	//Transfer sends a transfer transaction in the solidity contract
-	erc20.Approve(spenderAddr, supply)
-	erc20.Allowance(owerAddr, spenderAddr)
-
-	//transfer event
-	approveHash := erc20.ApprovalEventSig()
-	transferHash := erc20.TransferEventSig()
-
+	client, err := jsonrpc.NewClient("http://localhost:8545")
+	if err != nil {
+		log.Fatal(err)
+	}
 	bus := EventBus.New()
 	bus.Subscribe("main:calculator", calculator)
-	bus.Publish("main:calculator", approveHash)
-	bus.Publish("main:calculator", transferHash)
+
+	//订阅新区块
+	data := make(chan []byte)
+	cancel, err := client.Subscribe("newHeads", func(b []byte) {
+		data <- b
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+	for {
+		select {
+		case buf := <-data: //读取区块
+			var block ethgo.Block
+			if err := block.UnmarshalJSON(buf); err != nil {
+				log.Fatal(err)
+			}
+			//GetTransactionReceipt returns the receipt of a transaction by transaction hash.
+			receipt, err := client.Eth().GetTransactionReceipt(block.Hash)
+			if err != nil {
+				log.Fatal(err)
+			}
+			if len(receipt.Logs) > 0 {
+				for _, v := range receipt.Logs {
+					address := v.Topics[0]
+					//判断erc20 transfer
+					evm := new EVM(address)
+					funcs := evm.getFunctions()
+					if funcs[0] == "transfer(address,uint256)" {
+						bus.Publish("main:calculator", address)
+					}
+				}
+			}
+		}
+	}
 	bus.Unsubscribe("main:calculator", calculator)
+	log.Fatal(cancel)
+
 }
